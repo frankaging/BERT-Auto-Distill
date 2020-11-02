@@ -49,7 +49,9 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # (1) pred loss
             # (2) logit diff loss with techer model
             logit_loss_func = BCELoss()
-            logit_loss = logit_loss_func(student_logits, teacher_logits.detach().data)
+            logits_to_prob = nn.Sigmoid()
+            logit_loss = logit_loss_func(logits_to_prob(student_logits), 
+                                         logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
         elif args.alg == "rld":
             # TODO:
