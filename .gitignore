@@ -1,6 +1,11 @@
 *DS_Store
 results/
-models/
+models/teacher_model/*.bin
+models/teacher_model/*.pt
+models/teacher_model/*.ckpt.*
+models/student_model/*.bin
+models/student_model/*.pt
+models/student_model/*.ckpt.*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
