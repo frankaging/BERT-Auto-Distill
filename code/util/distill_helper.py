@@ -356,6 +356,60 @@ def step_train(train_dataloader, test_dataloader, model, optimizer,
 
     return global_step, global_best_acc
 
+def evaluate_fast(test_dataloader, model, device, n_gpu, args):
+    """
+    evaluate only and not recording anything
+    """
+    # eval_test
+    model.eval()
+    test_loss, test_accuracy = 0, 0
+    nb_test_steps, nb_test_examples = 0, 0
+    # we don't need gradient in this case.
+    with torch.no_grad():
+        for input_ids, input_mask, segment_ids, label_ids, seq_lens in test_dataloader:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            # truncate to save space and computing resource
+            max_seq_lens = max(seq_lens)[0]
+            input_ids = input_ids[:,:max_seq_lens]
+            input_mask = input_mask[:,:max_seq_lens]
+            segment_ids = segment_ids[:,:max_seq_lens]
+
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            segment_ids = segment_ids.to(device)
+            label_ids = label_ids.to(device)
+            seq_lens = seq_lens.to(device)
+
+            # intentially with gradient
+            tmp_test_loss, logits = \
+                model(input_ids, segment_ids, input_mask, seq_lens,
+                        device=device, labels=label_ids)
+
+            logits = F.softmax(logits, dim=-1)
+            logits = logits.detach().cpu().numpy()
+            label_ids = label_ids.to('cpu').numpy()
+            outputs = np.argmax(logits, axis=1)
+            tmp_test_accuracy=np.sum(outputs == label_ids)
+
+            test_loss += tmp_test_loss.mean().item()
+            test_accuracy += tmp_test_accuracy
+
+            nb_test_examples += input_ids.size(0)
+            nb_test_steps += 1
+
+        test_loss = test_loss / nb_test_steps
+        test_accuracy = test_accuracy / nb_test_examples
+
+    result = collections.OrderedDict()
+
+    result = {'test_loss': test_loss,
+                'test_accuracy': test_accuracy}
+    for key in result.keys():
+        logger.info("  %s = %s\n", key, str(result[key]))
+
+    return test_accuracy
+
 def evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch, 
              global_step, output_log_file, global_best_acc, args):
     # eval_test
