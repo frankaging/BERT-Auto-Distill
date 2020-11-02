@@ -1,7 +1,7 @@
 import argparse
 
 from util.distill_helper import *
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCELoss
 
 import logging
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
@@ -48,7 +48,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # let us use simply student loss
             # (1) pred loss
             # (2) logit diff loss with techer model
-            logit_loss_func = CrossEntropyLoss()
+            logit_loss_func = BCELoss()
             logit_loss = logit_loss_func(student_logits, teacher_logits)
             student_loss += logit_loss
         elif args.alg == "rld":
