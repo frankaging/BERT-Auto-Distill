@@ -30,6 +30,13 @@ parser.add_argument('--model_type',
                     choices=["TeacherBERT", "StudentBERT"],
                     help='type of model to train')
 # optional arguments
+parser.add_argument('--alg', 
+                    type=str,
+                    default="bd",
+                    choices=["bd", "nd", 'rld', 'pkd', 'kd'],
+                    help='what type of distillation we are looking for? \n'
+                         'bd (baseline distill), nd (no distill), rld (rl-based distill), '
+                         'pkd and kd (other type of sota distill algs)')
 parser.add_argument('--teacher_model_path', 
                     type=str,
                     default=None,

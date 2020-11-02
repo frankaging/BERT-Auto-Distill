@@ -224,8 +224,89 @@ def load_teacher_setups(vocab_file, bert_config_file,
                         t_total=num_train_steps)
     return model, tokenizer, optimizer
 
-def load_student_setups():
-    pass
+def load_student_setups(vocab_file, 
+                        teacher_config_file,
+                        teacher_model_path,
+                        student_config_file,
+                        init_checkpoint,
+                        label_list, 
+                        num_train_steps,
+                        do_lower_case=True, 
+                        learning_rate=2e-5,
+                        warmup_proportion=0.1):
+    logger.info("model = StudentBERT")
+
+    tokenizer = FullTokenizer(
+        vocab_file=vocab_file, do_lower_case=do_lower_case, pretrain=False)
+
+    # need to load teacher model inside
+    assert teacher_config_file is not None
+    assert teacher_model_path is not None
+    teacher_config = BertConfig.from_json_file(teacher_config_file)
+    logger.info("*** Teacher Model Config ***")
+    logger.info(teacher_config.to_json_string())
+    teacher_config.vocab_size = len(tokenizer.vocab)
+    teacher_model = BertForSequenceClassification(teacher_config, len(label_list))
+    teacher_state_dict = torch.load(teacher_model_path, map_location='cpu')
+    from collections import OrderedDict
+    new_teacher_state_dict = OrderedDict()
+    for k, v in teacher_state_dict.items():
+        if k.startswith('module.'):
+            name = k[7:] # remove 'module.' of dataparallel
+            new_teacher_state_dict[name]=v
+        else:
+            new_teacher_state_dict[k]=v
+    teacher_model.load_state_dict(new_teacher_state_dict)
+
+    # load student model
+    if student_config_file is not None:
+        student_config = BertConfig.from_json_file(student_config_file)
+    else:
+        # default?
+        student_config = BertConfig(
+            hidden_size=768,
+            num_hidden_layers=3,
+            num_attention_heads=12,
+            intermediate_size=3072,
+            hidden_act="gelu",
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+            max_position_embeddings=512,
+            type_vocab_size=2,
+            initializer_range=0.02
+        )
+    logger.info("*** Student Model Config ***")
+    logger.info(student_config.to_json_string())
+    student_config.vocab_size = len(tokenizer.vocab)
+    student_model = BertForSequenceClassification(student_config, len(label_list))
+    # student model may also be pretrained, but very unlikely
+    if "checkpoint" in init_checkpoint:
+        # we need to add handling logic specially for parallel gpu trainign
+        student_state_dict = torch.load(init_checkpoint, map_location='cpu')
+        from collections import OrderedDict
+        new_student_state_dict = OrderedDict()
+        for k, v in student_state_dict.items():
+            if k.startswith('module.'):
+                name = k[7:] # remove 'module.' of dataparallel
+                new_student_state_dict[name]=v
+            else:
+                new_student_state_dict[k]=v
+        student_model.load_state_dict(new_student_state_dict)
+    else:
+        pass
+
+    no_decay = ['bias', 'gamma', 'beta']
+    optimizer_parameters = [
+        {'params': [p for n, p in model.named_parameters() 
+            if not any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.01},
+        {'params': [p for n, p in model.named_parameters() 
+            if any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0}
+        ]
+    optimizer = BERTAdam(optimizer_parameters,
+                        lr=learning_rate,
+                        warmup=warmup_proportion,
+                        t_total=num_train_steps)
+    return teacher_model, student_model, tokenizer, optimizer
 
 def step_train(train_dataloader, test_dataloader, model, optimizer, 
                device, n_gpu, evaluate_interval, global_step, 
@@ -370,34 +451,33 @@ def data_and_model_loader(device, n_gpu, args):
                                 args.init_checkpoint, label_list, num_train_steps)
             # you can add other parameters later. but not important at this point
     else:
-        pass
+        teacher_model, student_model, tokenizer, optimizer = \
+            load_student_setups(args.vocab_file, args.teacher_config_file,
+                                args.teacher_model_path, args.student_config_file,
+                                args.init_checkpoint, label_list, num_train_steps)
 
     # training set
-    if args.model_type == "TeacherBERT":
-        train_features = convert_examples_to_features(
-            train_examples, label_list, args.max_seq_length,
-            tokenizer)
-        logger.info("***** Running training for teacher model *****")
-        logger.info("  Num examples = %d", len(train_examples))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_steps)
+    train_features = convert_examples_to_features(
+        train_examples, label_list, args.max_seq_length,
+        tokenizer)
+    logger.info("***** Running training for teacher model *****")
+    logger.info("  Num examples = %d", len(train_examples))
+    logger.info("  Batch size = %d", args.train_batch_size)
+    logger.info("  Num steps = %d", num_train_steps)
 
-        all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
-        all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
-        all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
-        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        all_seq_len = torch.tensor([[f.seq_len] for f in train_features], dtype=torch.long)
+    all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
+    all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
+    all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
+    all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
+    all_seq_len = torch.tensor([[f.seq_len] for f in train_features], dtype=torch.long)
 
-        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids,
-                                all_label_ids, all_seq_len)
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(train_data)
-        else:
-            train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
+    train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids,
+                            all_label_ids, all_seq_len)
+    if args.local_rank == -1:
+        train_sampler = RandomSampler(train_data)
     else:
-        # the training will contain some teacher model infos
-        pass
+        train_sampler = DistributedSampler(train_data)
+    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=10)
 
     # test set stays the same
     test_dataloader = None
@@ -417,14 +497,28 @@ def data_and_model_loader(device, n_gpu, args):
                                   all_label_ids, all_seq_len)
         test_dataloader = DataLoader(test_data, batch_size=args.eval_batch_size, shuffle=False)
 
-    if args.local_rank != -1:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
-                                                          output_device=args.local_rank)
-    elif n_gpu > 1:
-        model = torch.nn.DataParallel(model)
-    model.to(device)    
+    if args.model_type == "TeacherBERT":
+        if args.local_rank != -1:
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],
+                                                            output_device=args.local_rank)
+        elif n_gpu > 1:
+            model = torch.nn.DataParallel(model)
+        model.to(device)    
 
-    return model, optimizer, train_dataloader, test_dataloader
+        return model, optimizer, train_dataloader, test_dataloader
+    else:
+        if args.local_rank != -1:
+            teacher_model = torch.nn.parallel.DistributedDataParallel(teacher_model, device_ids=[args.local_rank],
+                                                            output_device=args.local_rank)
+            student_model = torch.nn.parallel.DistributedDataParallel(student_model, device_ids=[args.local_rank],
+                                                            output_device=args.local_rank)
+        elif n_gpu > 1:
+            teacher_model = torch.nn.DataParallel(teacher_model)
+            student_model = torch.nn.DataParallel(student_model)
+        teacher_model.to(device)
+        student_model.to(device)    
+
+        return teacher_model, student_model, optimizer, train_dataloader, test_dataloader
 
 def system_setups(args):
     # system related setups
