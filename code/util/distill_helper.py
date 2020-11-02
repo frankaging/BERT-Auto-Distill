@@ -280,20 +280,21 @@ def load_student_setups(vocab_file,
     student_config.vocab_size = len(tokenizer.vocab)
     student_model = BertForSequenceClassification(student_config, len(label_list))
     # student model may also be pretrained, but very unlikely
-    if "checkpoint" in init_checkpoint:
-        # we need to add handling logic specially for parallel gpu trainign
-        student_state_dict = torch.load(init_checkpoint, map_location='cpu')
-        from collections import OrderedDict
-        new_student_state_dict = OrderedDict()
-        for k, v in student_state_dict.items():
-            if k.startswith('module.'):
-                name = k[7:] # remove 'module.' of dataparallel
-                new_student_state_dict[name]=v
-            else:
-                new_student_state_dict[k]=v
-        student_model.load_state_dict(new_student_state_dict)
-    else:
-        pass
+    if init_checkpoint is not None:
+        if "checkpoint" in init_checkpoint:
+            # we need to add handling logic specially for parallel gpu trainign
+            student_state_dict = torch.load(init_checkpoint, map_location='cpu')
+            from collections import OrderedDict
+            new_student_state_dict = OrderedDict()
+            for k, v in student_state_dict.items():
+                if k.startswith('module.'):
+                    name = k[7:] # remove 'module.' of dataparallel
+                    new_student_state_dict[name]=v
+                else:
+                    new_student_state_dict[k]=v
+            student_model.load_state_dict(new_student_state_dict)
+        else:
+            pass
 
     no_decay = ['bias', 'gamma', 'beta']
     optimizer_parameters = [
