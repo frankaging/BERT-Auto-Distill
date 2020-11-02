@@ -296,11 +296,12 @@ def load_student_setups(vocab_file,
         else:
             pass
 
+    # this optimizer is for the student model only
     no_decay = ['bias', 'gamma', 'beta']
     optimizer_parameters = [
-        {'params': [p for n, p in model.named_parameters() 
+        {'params': [p for n, p in student_model.named_parameters() 
             if not any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.01},
-        {'params': [p for n, p in model.named_parameters() 
+        {'params': [p for n, p in student_model.named_parameters() 
             if any(nd in n for nd in no_decay)], 'weight_decay_rate': 0.0}
         ]
     optimizer = BERTAdam(optimizer_parameters,
