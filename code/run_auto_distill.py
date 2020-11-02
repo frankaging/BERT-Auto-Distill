@@ -49,7 +49,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # (1) pred loss
             # (2) logit diff loss with techer model
             logit_loss_func = BCELoss()
-            logit_loss = logit_loss_func(student_logits, teacher_logits)
+            logit_loss = logit_loss_func(student_logits, teacher_logits.detach().data)
             student_loss += logit_loss
         elif args.alg == "rld":
             # TODO:
@@ -95,9 +95,11 @@ def main(args):
     elif args.model_type == "StudentBERT":
         teacher_model, student_model, optimizer, train_dataloader, test_dataloader = \
             data_and_model_loader(device, n_gpu, args)
-        # we will first evaluate teacher model as a target accuracy
-        logger.info("***** Evaluation Teacher Model *****")
-        _ = evaluate_fast(test_dataloader, teacher_model, device, n_gpu, args)
+        # TODO: add a argument about it
+        if False:
+            # we will first evaluate teacher model as a target accuracy
+            logger.info("***** Evaluation Teacher Model *****")
+            _ = evaluate_fast(test_dataloader, teacher_model, device, n_gpu, args)
 
     # main training step    
     global_step = 0
