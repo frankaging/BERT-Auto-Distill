@@ -44,20 +44,20 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             student_model(input_ids, segment_ids, input_mask, seq_lens,
                           device=device, labels=label_ids)
 
-        if args.goal == "bd":
+        if args.alg == "bd":
             # let us use simply student loss
             # (1) pred loss
             # (2) logit diff loss with techer model
             logit_loss_func = CrossEntropyLoss()
             logit_loss = logit_loss_func(student_logits, teacher_logits)
             student_loss += logit_loss
-        elif args.goal == "rld":
+        elif args.alg == "rld":
             # TODO:
             # RL-based losses here!
             pass
-        elif args.goal == "nd":
+        elif args.alg == "nd":
             pass
-        elif args.goal == "pkd":
+        elif args.alg == "pkd":
             # other baseline
             pass
         else:
