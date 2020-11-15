@@ -1,7 +1,7 @@
 import argparse
 
 from util.distill_helper import *
-from torch.nn import CrossEntropyLoss, BCELoss
+from torch.nn import CrossEntropyLoss, BCELoss, Sigmoid
 
 import logging
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
@@ -49,7 +49,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # (1) pred loss
             # (2) logit diff loss with techer model
             logit_loss_func = BCELoss()
-            logits_to_prob = nn.Sigmoid()
+            logits_to_prob = Sigmoid()
             logit_loss = logit_loss_func(logits_to_prob(student_logits), 
                                          logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
@@ -61,6 +61,10 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             pass
         elif args.alg == "pkd":
             # other baseline
+            pass
+        elif args.alg == "spkd":
+            # we implement a very simple pkd distill
+            # just to show the current upper bound
             pass
         else:
             pass
