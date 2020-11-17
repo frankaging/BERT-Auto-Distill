@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # we include here as it is clearly as this is our main function
 def step_distill(train_dataloader, test_dataloader, teacher_model, student_model,
-                 optimizer, device, n_gpu, evaluate_interval, global_step, 
+                 rl_agents, optimizer, device, n_gpu, evaluate_interval, global_step, 
                  output_log_file, epoch, global_best_acc, args):
     tr_loss = 0
     nb_tr_examples, nb_tr_steps = 0, 0
@@ -36,11 +36,11 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         label_ids = label_ids.to(device)
         seq_lens = seq_lens.to(device)
 
-        _, teacher_logits = \
+        _, teacher_logits, teacher_env_encoder, _ = \
             teacher_model(input_ids, segment_ids, input_mask, seq_lens,
                           device=device, labels=label_ids)
 
-        student_loss, student_logits = \
+        student_loss, student_logits, student_env_encoder, _ = \
             student_model(input_ids, segment_ids, input_mask, seq_lens,
                           device=device, labels=label_ids)
 
@@ -54,9 +54,32 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                                          logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
         elif args.alg == "rld":
-            # TODO:
-            # RL-based losses here!
-            pass
+            # get rl agents
+            (actor, critic) = rl_agents
+            # get env
+            t_env = teacher_env_encoder[-1] # last layer encoder output
+            s_env = student_env_encoder[-1]
+            # form state vector
+            input_state = torch.cat([t_env, s_env], dim=-1)
+            # evaluate
+            dist, value = actor(input_state), critic(input_state)
+            # sample action
+            imitate_count = student_model.bert.config.num_hidden_layers
+            actions = dist.sample(sample_shape=(input_state.shape[0], imitate_count))
+
+            # calculate reward
+            print(actions)
+
+            # add into buffer for learn
+
+
+            # bd loss
+            logit_loss_func = BCELoss()
+            logits_to_prob = Sigmoid()
+            logit_loss = logit_loss_func(logits_to_prob(student_logits), 
+                                         logits_to_prob(teacher_logits.detach().data))
+            student_loss += logit_loss
+
         elif args.alg == "nd":
             pass
         elif args.alg == "pkd":
@@ -92,14 +115,14 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
 def main(args):
 
-    device, n_gpu, output_log_file= system_setups(args)
+    device, n_gpu, output_log_file = system_setups(args)
 
     # data loader, we load the model and corresponding training and testing sets
     if args.model_type == "TeacherBERT":
         model, optimizer, train_dataloader, test_dataloader = \
             data_and_model_loader(device, n_gpu, args)
     elif args.model_type == "StudentBERT":
-        teacher_model, student_model, optimizer, train_dataloader, test_dataloader = \
+        teacher_model, student_model, rl_agents, optimizer, train_dataloader, test_dataloader = \
             data_and_model_loader(device, n_gpu, args)
         # TODO: add a argument about it
         if False:
@@ -124,7 +147,7 @@ def main(args):
             # we are training a student model instead
             global_step, global_best_acc = \
                 step_distill(train_dataloader, test_dataloader, 
-                             teacher_model, student_model,
+                             teacher_model, student_model, rl_agents,
                              optimizer, device, n_gpu, evaluate_interval, global_step, 
                              output_log_file, epoch, global_best_acc, args)
         epoch += 1

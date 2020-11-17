@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from model.BERT import *
+from model.Agents import *
 
 from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
 
@@ -308,7 +309,14 @@ def load_student_setups(vocab_file,
                         lr=learning_rate,
                         warmup=warmup_proportion,
                         t_total=num_train_steps)
-    return teacher_model, student_model, tokenizer, optimizer
+    rl_agents = None
+    actor = Actor(student_config.hidden_size*2, 
+                  teacher_config.num_hidden_layers)
+    critic = Critic(student_config.hidden_size*2, 
+                    teacher_config.num_hidden_layers)
+    rl_agents = (actor, critic)
+
+    return teacher_model, student_model, tokenizer, optimizer, rl_agents
 
 def step_train(train_dataloader, test_dataloader, model, optimizer, 
                device, n_gpu, evaluate_interval, global_step, 
@@ -334,7 +342,7 @@ def step_train(train_dataloader, test_dataloader, model, optimizer,
         label_ids = label_ids.to(device)
         seq_lens = seq_lens.to(device)
 
-        loss, _ = \
+        loss, _, _, _ = \
             model(input_ids, segment_ids, input_mask, seq_lens,
                             device=device, labels=label_ids)
         if n_gpu > 1:
@@ -384,7 +392,7 @@ def evaluate_fast(test_dataloader, model, device, n_gpu, args):
             seq_lens = seq_lens.to(device)
 
             # intentially with gradient
-            tmp_test_loss, logits = \
+            tmp_test_loss, logits, _, _ = \
                 model(input_ids, segment_ids, input_mask, seq_lens,
                         device=device, labels=label_ids)
 
@@ -437,7 +445,7 @@ def evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch,
                 seq_lens = seq_lens.to(device)
 
                 # intentially with gradient
-                tmp_test_loss, logits = \
+                tmp_test_loss, logits, _, _ = \
                     model(input_ids, segment_ids, input_mask, seq_lens,
                             device=device, labels=label_ids)
 
@@ -500,6 +508,7 @@ def data_and_model_loader(device, n_gpu, args):
     num_train_steps = int(
         len(train_examples) / args.train_batch_size * args.num_train_epochs)
 
+    rl_agents = None
     # we need to check whehter this is a teacher model training or student distillation
     if args.model_type == "TeacherBERT":
         model, tokenizer, optimizer = \
@@ -507,7 +516,7 @@ def data_and_model_loader(device, n_gpu, args):
                                 args.init_checkpoint, label_list, num_train_steps)
             # you can add other parameters later. but not important at this point
     else:
-        teacher_model, student_model, tokenizer, optimizer = \
+        teacher_model, student_model, tokenizer, optimizer, rl_agents = \
             load_student_setups(args.vocab_file, args.teacher_config_file,
                                 args.teacher_model_path, args.student_config_file,
                                 args.init_checkpoint, label_list, num_train_steps)
@@ -574,7 +583,7 @@ def data_and_model_loader(device, n_gpu, args):
         teacher_model.to(device)
         student_model.to(device)    
 
-        return teacher_model, student_model, optimizer, train_dataloader, test_dataloader
+        return teacher_model, student_model, rl_agents, optimizer, train_dataloader, test_dataloader
 
 def system_setups(args):
     # system related setups
