@@ -52,7 +52,11 @@ class DistillEnv():
     def __init__(self, verbose = False):
         pass
 
-    def 
+    def reset():
+        pass
+
+    def step():
+        pass
 
 if __name__ == '__main__':
     actor = Actor(768,3)

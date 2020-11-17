@@ -34,4 +34,4 @@ CUDA_VISIBLE_DEVICES=1,3,5,6 python run_auto_distill.py \
 --seed 42 \
 --teacher_config_file ../models/uncased_L-12_H-768_A-12/bert_config.json \
 --teacher_model_path ../results/SST2-TeacherBERT/best_checkpoint.bin \
---alg nd
+--alg rld
