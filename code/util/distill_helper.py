@@ -581,7 +581,9 @@ def data_and_model_loader(device, n_gpu, args):
             teacher_model = torch.nn.DataParallel(teacher_model)
             student_model = torch.nn.DataParallel(student_model)
         teacher_model.to(device)
-        student_model.to(device)    
+        student_model.to(device)
+        for agent in rl_agents:
+            agent.to(device)
 
         return teacher_model, student_model, rl_agents, optimizer, train_dataloader, test_dataloader
 
