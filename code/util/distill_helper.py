@@ -315,8 +315,9 @@ def load_student_setups(vocab_file,
     critic = Critic(student_config.hidden_size*2, 
                     teacher_config.num_hidden_layers)
     rl_agents = (actor, critic)
+    rl_env = DistillEnv()
 
-    return teacher_model, student_model, tokenizer, optimizer, rl_agents
+    return teacher_model, student_model, tokenizer, optimizer, rl_agents, rl_env
 
 def step_train(train_dataloader, test_dataloader, model, optimizer, 
                device, n_gpu, evaluate_interval, global_step, 
@@ -509,6 +510,7 @@ def data_and_model_loader(device, n_gpu, args):
         len(train_examples) / args.train_batch_size * args.num_train_epochs)
 
     rl_agents = None
+    rl_env = None
     # we need to check whehter this is a teacher model training or student distillation
     if args.model_type == "TeacherBERT":
         model, tokenizer, optimizer = \
@@ -516,11 +518,10 @@ def data_and_model_loader(device, n_gpu, args):
                                 args.init_checkpoint, label_list, num_train_steps)
             # you can add other parameters later. but not important at this point
     else:
-        teacher_model, student_model, tokenizer, optimizer, rl_agents = \
+        teacher_model, student_model, tokenizer, optimizer, rl_agents, rl_env = \
             load_student_setups(args.vocab_file, args.teacher_config_file,
                                 args.teacher_model_path, args.student_config_file,
                                 args.init_checkpoint, label_list, num_train_steps)
-
     # training set
     train_features = convert_examples_to_features(
         train_examples, label_list, args.max_seq_length,
@@ -585,7 +586,8 @@ def data_and_model_loader(device, n_gpu, args):
         for agent in rl_agents:
             agent.to(device)
 
-        return teacher_model, student_model, rl_agents, optimizer, train_dataloader, test_dataloader
+        return teacher_model, student_model, rl_agents, rl_env, optimizer, \
+            train_dataloader, test_dataloader
 
 def system_setups(args):
     # system related setups

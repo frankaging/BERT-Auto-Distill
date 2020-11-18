@@ -50,13 +50,32 @@ class DistillEnv():
     Distillation environment that the agent can act on.
     """
     def __init__(self, verbose = False):
-        pass
+        self.internal_state = []
 
-    def reset():
-        pass
+    def reset(self):
+        self.internal_state = []
 
-    def step():
-        pass
+    def update(self, new_state):
+        self.internal_state = new_state
+
+    def step(self, action):
+        imitation_states = []
+        for layer_idx in range(action.shape[0]):
+            batch_imitation_states = []
+            for batch_idx in range(action.shape[1]):
+                imitation_target = action[layer_idx, batch_idx]
+                imitation_state = self.internal_state[imitation_target][batch_idx]
+                batch_imitation_states.append(imitation_state)
+            batch_imitation_states = torch.stack(batch_imitation_states, dim=0) # [b, dim]
+            imitation_states.append(batch_imitation_states)
+        return imitation_states
+
+    def step_fix(self, action):
+        """
+        we step rl agent with fixed policy, selecting on certain layers
+        """
+        layer_count = action.shape[0]
+        return self.internal_state[-layer_count:] # we simply pick the last layers
 
 if __name__ == '__main__':
     actor = Actor(768,3)

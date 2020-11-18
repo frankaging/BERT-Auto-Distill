@@ -9,9 +9,38 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
                     level = logging.INFO)
 logger = logging.getLogger(__name__)
 
+def imitation_distance(teacher_states, student_states, seq_mask, dist_type="pkd"):
+    """
+    this part, we can take advantage of previous papers.
+    Eqn. (7) for this paper https://arxiv.org/pdf/1908.09355.pdf
+    is implemented here.
+    """
+    if isinstance(teacher_states, list):
+        teacher_states = torch.stack(teacher_states, dim=0)
+    if isinstance(student_states, list):
+        student_states = torch.stack(student_states, dim=0)
+    
+    if dist_type == "pkd":
+        # taking the unit value
+        teacher_states_d = teacher_states.detach().data # detach it
+        student_states_d = student_states.detach().data
+
+        teacher_states_n = teacher_states_d.norm(p=2, dim=-1, keepdim=True)
+        student_states_n = student_states_d.norm(p=2, dim=-1, keepdim=True)
+
+        teacher_states_normalized = teacher_states_d.div(teacher_states_n)
+        student_states_normalized = student_states_d.div(student_states_n)
+
+        pkd_dist = teacher_states_normalized - student_states_normalized
+        pkd_dist = pkd_dist.norm(p=2, dim=-1, keepdim=True).pow(2)
+        pkd_dist = pkd_dist.sum(dim=0).sum(dim=-1)
+        # masking
+        pkd_dist = pkd_dist * seq_mask
+        return pkd_dist.mean() # using the same reduction
+
 # we include here as it is clearly as this is our main function
 def step_distill(train_dataloader, test_dataloader, teacher_model, student_model,
-                 rl_agents, optimizer, device, n_gpu, evaluate_interval, global_step, 
+                 rl_agents, rl_env, optimizer, device, n_gpu, evaluate_interval, global_step, 
                  output_log_file, epoch, global_best_acc, args):
     tr_loss = 0
     nb_tr_examples, nb_tr_steps = 0, 0
@@ -53,32 +82,43 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             logit_loss = logit_loss_func(logits_to_prob(student_logits), 
                                          logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
+
         elif args.alg == "rld":
             # get rl agents
             (actor, critic) = rl_agents
             # get env
             t_env = teacher_env_encoder[-1] # last layer encoder output
             s_env = student_env_encoder[-1]
-            # form state vector
-            input_state = torch.cat([t_env, s_env], dim=-1)
+            rl_env.update(teacher_env_encoder) # the env is all teacher's model internal states
+            # form state vector, we only want a single decison per sentence
+            input_state = torch.cat([t_env, s_env], dim=-1) # [b, seq, dim*2]
+            input_state = input_state[:,0] # using CLS token
             # evaluate
             dist, value = actor(input_state), critic(input_state)
             # sample action
             imitate_count = student_model.bert.config.num_hidden_layers
-            actions = dist.sample(sample_shape=(input_state.shape[0], imitate_count))
-
-            # calculate reward
-            print(actions)
-
-            # add into buffer for learn
-
-
-            # bd loss
+            action = dist.sample(sample_shape=(imitate_count, ))
+            # take action
+            imitation_states = rl_env.step(action) # the imitation_states should 
+                                                    # contains a entry with the same
+                                                    # shape as student_env_encoder
+            imi_dist = \
+                    imitation_distance(imitation_states, 
+                                       student_env_encoder, 
+                                       input_mask) # distance is not reward.
+                                                   # RL is learning to pick the
+                                                   # right layer, not the similiar
+                                                   # layer. RL is rewarded based 
+                                                   # on hindsight loss.
+            # adding bd loss
             logit_loss_func = BCELoss()
             logits_to_prob = Sigmoid()
             logit_loss = logit_loss_func(logits_to_prob(student_logits), 
                                          logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
+            student_loss += imi_dist
+            # the reward is only calculatable once the model is evaluated
+            # using the updated weights.
 
         elif args.alg == "nd":
             pass
@@ -122,7 +162,8 @@ def main(args):
         model, optimizer, train_dataloader, test_dataloader = \
             data_and_model_loader(device, n_gpu, args)
     elif args.model_type == "StudentBERT":
-        teacher_model, student_model, rl_agents, optimizer, train_dataloader, test_dataloader = \
+        teacher_model, student_model, rl_agents, rl_env, optimizer, \
+            train_dataloader, test_dataloader = \
             data_and_model_loader(device, n_gpu, args)
         # TODO: add a argument about it
         if False:
@@ -130,6 +171,8 @@ def main(args):
             logger.info("***** Evaluation Teacher Model *****")
             _ = evaluate_fast(test_dataloader, teacher_model, device, n_gpu, args)
 
+    # reset the rl env
+    rl_env.reset()
     # main training step    
     global_step = 0
     global_best_acc = -1
@@ -147,7 +190,7 @@ def main(args):
             # we are training a student model instead
             global_step, global_best_acc = \
                 step_distill(train_dataloader, test_dataloader, 
-                             teacher_model, student_model, rl_agents,
+                             teacher_model, student_model, rl_agents, rl_env,
                              optimizer, device, n_gpu, evaluate_interval, global_step, 
                              output_log_file, epoch, global_best_acc, args)
         epoch += 1
