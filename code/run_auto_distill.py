@@ -3,6 +3,7 @@ import argparse
 from util.distill_helper import *
 from torch.nn import CrossEntropyLoss, BCELoss, Sigmoid
 
+import torch.optim as optim
 import logging
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s', 
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -40,11 +41,21 @@ def imitation_distance(teacher_states, student_states, seq_mask, dist_type="pkd"
 
 # we include here as it is clearly as this is our main function
 def step_distill(train_dataloader, test_dataloader, teacher_model, student_model,
-                 rl_agents, rl_env, optimizer, device, n_gpu, evaluate_interval, global_step, 
+                 rl_agents, rl_env, optimizerA, optimizerC, optimizer, device, n_gpu, evaluate_interval, global_step, 
                  output_log_file, epoch, global_best_acc, args):
     tr_loss = 0
     nb_tr_examples, nb_tr_steps = 0, 0
     pbar = tqdm(train_dataloader, desc="Iteration")
+
+    # RL configs
+    rl_coldstart= True
+    prev_action, prev_dist, prev_value = None, None, None
+    log_probs = []
+    values = []
+    rewards = []
+    masks = []
+    entropy = 0
+
     for step, batch in enumerate(pbar):
         teacher_model.eval()
         student_model.train()
@@ -84,6 +95,28 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             student_loss += logit_loss
 
         elif args.alg == "rld":
+            # adding bd loss
+            logit_loss_func = BCELoss()
+            logits_to_prob = Sigmoid()
+            logit_loss = logit_loss_func(logits_to_prob(student_logits), 
+                                         logits_to_prob(teacher_logits.detach().data))
+            #####
+            # i think we should calculate RL reward here.
+            # for the first step, RL is not effecting the result
+            # thus reward is delayed till a start
+            # this reward is for the previous RL actions.
+            if rl_coldstart:
+                rl_coldstart = False
+            else:
+                reward = -1.0 * student_loss
+                log_prob = prev_dist.log_prob(prev_action).unsqueeze(0)
+                entropy += prev_dist.entropy().mean()
+
+                log_probs.append(log_prob)
+                values.append(prev_value)
+                rewards.append(torch.tensor([reward], dtype=torch.float, device=device))
+            #####
+
             # get rl agents
             (actor, critic) = rl_agents
             # get env
@@ -110,24 +143,23 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                                                    # right layer, not the similiar
                                                    # layer. RL is rewarded based 
                                                    # on hindsight loss.
-            # adding bd loss
-            logit_loss_func = BCELoss()
-            logits_to_prob = Sigmoid()
-            logit_loss = logit_loss_func(logits_to_prob(student_logits), 
-                                         logits_to_prob(teacher_logits.detach().data))
-            student_loss += logit_loss
-            student_loss += imi_dist
             # the reward is only calculatable once the model is evaluated
             # using the updated weights.
+            prev_action =  action
+            prev_dist = dist
+            prev_value = value
+
+            # dnn loss
+            student_loss += logit_loss
+            student_loss += imi_dist
 
         elif args.alg == "nd":
             pass
         elif args.alg == "pkd":
             # other baseline
             pass
-        elif args.alg == "spkd":
-            # we implement a very simple pkd distill
-            # just to show the current upper bound
+        elif args.alg == "rrld":
+            # let us try a random RL agent here
             pass
         else:
             pass
@@ -146,6 +178,24 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             global_step += 1
         pbar.set_postfix({'train_loss': student_loss.tolist()})
 
+        # RL learning
+        # log_probs = torch.cat(log_probs)
+        # returns = torch.cat(returns).detach()
+        # values = torch.cat(values)
+
+        # advantage = returns - values
+
+        # actor_loss = -(log_probs * advantage.detach()).mean()
+        # critic_loss = advantage.pow(2).mean()
+
+        # optimizerA.zero_grad()
+        # optimizerC.zero_grad()
+        # actor_loss.backward()
+        # critic_loss.backward()
+        # optimizerA.step()
+        # optimizerC.step()
+
+        # dnn evaluation
         if global_step % 500 == 0:
             logger.info("***** Evaluation Interval Hit *****")
             global_best_acc = evaluate(test_dataloader, student_model, device, n_gpu, nb_tr_steps, tr_loss, epoch, 
@@ -173,6 +223,8 @@ def main(args):
 
     # reset the rl env
     rl_env.reset()
+    optimizerA = optim.Adam(rl_agents[0].parameters())
+    optimizerC = optim.Adam(rl_agents[1].parameters())
     # main training step    
     global_step = 0
     global_best_acc = -1
@@ -190,7 +242,7 @@ def main(args):
             # we are training a student model instead
             global_step, global_best_acc = \
                 step_distill(train_dataloader, test_dataloader, 
-                             teacher_model, student_model, rl_agents, rl_env,
+                             teacher_model, student_model, rl_agents, rl_env, optimizerA, optimizerC, 
                              optimizer, device, n_gpu, evaluate_interval, global_step, 
                              output_log_file, epoch, global_best_acc, args)
         epoch += 1
@@ -198,6 +250,10 @@ def main(args):
     logger.info("***** Global best performance *****")
     logger.info("accuracy on dev set: " + str(global_best_acc))
     
+    # saving RL agents
+    # torch.save(actor, 'model/actor.pkl')
+    # torch.save(critic, 'model/critic.pkl')
+
 if __name__ == "__main__":
     from util.args_parser import parser
     args = parser.parse_args()
