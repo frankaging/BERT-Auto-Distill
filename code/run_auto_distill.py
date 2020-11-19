@@ -247,6 +247,7 @@ def main(args):
     device, n_gpu, output_log_file = system_setups(args)
     
     # this is an extra step to check with wandb
+    wandb = None
     if args.is_tensorboard:  
         import wandb
         args.date_time = "{}-{}".format(datetime.datetime.now().month, datetime.datetime.now().day)
