@@ -250,7 +250,7 @@ def main(args):
     if args.is_tensorboard:  
         import wandb
         args.date_time = "{}-{}".format(datetime.datetime.now().month, datetime.datetime.now().day)
-        filename = "{0}_{1}_algo_{2}_ml_{3}_lr_{}_seed_{}".format(
+        filename = "{0}_{1}_algo_{2}_ml_{3}_lr_{4}_seed_{5}".format(
             args.task_name,
             args.model_type,
             args.alg,
