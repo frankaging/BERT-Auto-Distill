@@ -17,7 +17,7 @@ CUDA_VISIBLE_DEVICES=5,7 python run_auto_distill.py \
 --init_checkpoint ../models/SST2-TeacherBERT/pytorch_model.bin
 
 # Training/distilling student model
-CUDA_VISIBLE_DEVICES=1,3,5,6 python run_auto_distill.py \
+CUDA_VISIBLE_DEVICES=1,3,4,8 python run_auto_distill.py \
 --task_name SST2 \
 --data_dir ../datasets/SST-2/ \
 --vocab_file ../models/student_model/vocab.txt \

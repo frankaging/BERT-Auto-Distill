@@ -141,7 +141,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             dist, value = actor(input_state.detach()), critic(input_state.detach())
             prev_state = input_state
             # sample action
-            imitate_count = student_model.bert.config.num_hidden_layers
+            imitate_count = 3
             action = dist.sample(sample_shape=(imitate_count, ))
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
