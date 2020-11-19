@@ -1,7 +1,7 @@
 # Training teacher model
 CUDA_VISIBLE_DEVICES=5,7 python run_auto_distill.py \
 --task_name SST2 \
---data_dir ../sample_data/dataset/SST2/ \
+--data_dir ../datasets/SST-2/ \
 --vocab_file ../models/SST2-TeacherBERT/vocab.txt \
 --teacher_config_file ../models/SST2-TeacherBERT/bert_config.json \
 --model_type TeacherBERT \
@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=5,7 python run_auto_distill.py \
 # Training/distilling student model
 CUDA_VISIBLE_DEVICES=1,3,5,6 python run_auto_distill.py \
 --task_name SST2 \
---data_dir ../sample_data/dataset/SST2/ \
+--data_dir ../datasets/SST-2/ \
 --vocab_file ../models/student_model/vocab.txt \
 --student_config_file ../models/student_model/bert_config.json \
 --model_type StudentBERT \
