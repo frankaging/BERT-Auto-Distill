@@ -483,8 +483,8 @@ def evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch,
                 'loss': loss_tr}
 
     if args.is_tensorboard:
-        wandb.log({'eval_loss': test_loss.detach().cpu().numpy().tolist()}, step=global_step)
-        wandb.log({'eval_accuracy': test_accuracy.detach().cpu().numpy().tolist()}, step=global_step)
+        wandb.log({'eval_loss': test_loss}, step=global_step)
+        wandb.log({'eval_accuracy': test_accuracy}, step=global_step)
 
     logger.info("***** Eval results *****")
     with open(output_log_file, "a+") as writer:
