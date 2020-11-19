@@ -124,8 +124,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                 values.append(prev_value)
                 rewards.append(reward)
                 if args.is_tensorboard:
-                    wandb.log({'reward': reward}, step=global_step)
-                    wandb.log({'entropy': entropy}, step=global_step)
+                    wandb.log({'reward': reward.cpu().numpy().tolist()}, step=global_step)
+                    wandb.log({'entropy': entropy.cpu().numpy().tolist()}, step=global_step)
             #####
 
             # get rl agents
@@ -199,12 +199,12 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
             actor_loss = -(log_probs * advantage.detach()).mean()
             critic_loss = advantage.pow(2).mean()
-            pbar.set_postfix({'actor_loss': actor_loss.tolist()})
-            pbar.set_postfix({'critic_loss': critic_loss.tolist()})
+            pbar.set_postfix({'actor_loss': actor_loss.cpu().numpy().tolist()})
+            pbar.set_postfix({'critic_loss': critic_loss.cpu().numpy().tolist()})
 
             if args.is_tensorboard:
-                wandb.log({'actor_loss': actor_loss.tolist()}, step=global_step)
-                wandb.log({'critic_loss': critic_loss.tolist()}, step=global_step)
+                wandb.log({'actor_loss': actor_loss.cpu().numpy().tolist()}, step=global_step)
+                wandb.log({'critic_loss': critic_loss.cpu().numpy().tolist()}, step=global_step)
 
             optimizerA.zero_grad()
             optimizerC.zero_grad()
@@ -231,7 +231,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         pbar.set_postfix({'train_loss': student_loss.tolist()})
 
         if args.is_tensorboard:
-            wandb.log({'train_loss': student_loss.tolist()}, step=global_step)
+            wandb.log({'train_loss': student_loss.cpu().numpy().tolist()}, step=global_step)
 
         # dnn evaluation
         if global_step % 500 == 0:
