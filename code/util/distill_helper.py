@@ -359,6 +359,8 @@ def step_train(train_dataloader, test_dataloader, model, optimizer,
             model.zero_grad()
             global_step += 1
         pbar.set_postfix({'train_loss': loss.tolist()})
+        if args.is_tensorboard:
+            wandb.log({'train_loss': loss.detach().cpu().numpy().tolist()}, step=global_step)
 
         if global_step % 500 == 0:
             logger.info("***** Evaluation Interval Hit *****")
