@@ -172,6 +172,10 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             pass
         elif args.alg == "pkd":
             # other baseline
+            logit_loss_func = BCELoss()
+            logits_to_prob = Sigmoid()
+            logit_loss = logit_loss_func(logits_to_prob(student_logits),
+                                         logits_to_prob(teacher_logits.detach().data))
             nll_loss = F.cross_entropy(student_logits, label_ids, reduction='mean')
             # TODO: make alpha a hyperparameter
             alpha = 0.5
