@@ -124,8 +124,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                 values.append(prev_value)
                 rewards.append(reward)
                 if args.is_tensorboard:
-                    wandb.log({'reward': reward.detach().cpu().numpy().tolist()}, step=global_step)
-                    wandb.log({'entropy': entropy.detach().cpu().numpy().tolist()}, step=global_step)
+                    wandb.log({'rewards': reward.detach().cpu().mean().numpy().tolist(),
+                               'entropy': entropy.detach().cpu().numpy().tolist()}, step=global_step)
             #####
 
             # get rl agents
