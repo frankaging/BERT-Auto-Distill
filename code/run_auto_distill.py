@@ -39,6 +39,14 @@ def imitation_distance(teacher_states, student_states, seq_mask, dist_type="pkd"
         pkd_dist = pkd_dist * seq_mask
         return pkd_dist.mean() # using the same reduction
 
+def compute_returns(next_value, rewards, gamma=0.99):
+    R = next_value
+    returns = []
+    for step in reversed(range(len(rewards) - 1)):
+        R = rewards[step] + gamma * R
+        returns.insert(0, R)
+    return returns
+
 # we include here as it is clearly as this is our main function
 def step_distill(train_dataloader, test_dataloader, teacher_model, student_model,
                  rl_agents, rl_env, optimizerA, optimizerC, optimizer, device, n_gpu, evaluate_interval, global_step, 
@@ -49,11 +57,10 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
     # RL configs
     rl_coldstart= True
-    prev_action, prev_dist, prev_value = None, None, None
+    prev_action, prev_dist, prev_value, prev_state = None, None, None, None
     log_probs = []
     values = []
     rewards = []
-    masks = []
     entropy = 0
 
     for step, batch in enumerate(pbar):
@@ -80,10 +87,11 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             teacher_model(input_ids, segment_ids, input_mask, seq_lens,
                           device=device, labels=label_ids)
 
-        student_loss, student_logits, student_env_encoder, _ = \
+        student_loss_raw, student_logits, student_env_encoder, _ = \
             student_model(input_ids, segment_ids, input_mask, seq_lens,
                           device=device, labels=label_ids)
 
+        student_loss = student_loss_raw.mean()
         if args.alg == "bd":
             # let us use simply student loss
             # (1) pred loss
@@ -105,16 +113,19 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # for the first step, RL is not effecting the result
             # thus reward is delayed till a start
             # this reward is for the previous RL actions.
-            if rl_coldstart:
-                rl_coldstart = False
-            else:
-                reward = -1.0 * student_loss
-                log_prob = prev_dist.log_prob(prev_action).unsqueeze(0)
+            if not rl_coldstart:
+                reward = -1.0 * student_loss_raw.unsqueeze(dim=-1)
+                log_prob = prev_dist.log_prob(prev_action)
                 entropy += prev_dist.entropy().mean()
-
+                log_prob = log_prob.permute(1,0)
                 log_probs.append(log_prob)
                 values.append(prev_value)
-                rewards.append(torch.tensor([reward], dtype=torch.float, device=device))
+                rewards.append(reward)
+
+                print("*****")
+                print(len(log_probs))
+                print(log_prob.shape)
+                print("*****")
             #####
 
             # get rl agents
@@ -127,7 +138,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             input_state = torch.cat([t_env, s_env], dim=-1) # [b, seq, dim*2]
             input_state = input_state[:,0] # using CLS token
             # evaluate
-            dist, value = actor(input_state), critic(input_state)
+            dist, value = actor(input_state.detach()), critic(input_state.detach())
+            prev_state = input_state
             # sample action
             imitate_count = student_model.bert.config.num_hidden_layers
             action = dist.sample(sample_shape=(imitate_count, ))
@@ -153,6 +165,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             student_loss += logit_loss
             student_loss += imi_dist
 
+            rl_coldstart = False
         elif args.alg == "nd":
             pass
         elif args.alg == "pkd":
@@ -169,6 +182,43 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         if args.gradient_accumulation_steps > 1:
             student_loss = student_loss / args.gradient_accumulation_steps
         student_loss.backward()
+
+        # RL learning
+        # we will need to update for certain number of training step.
+        # we don't want to only update RL once a whole training epoch is done.
+        # if this happen, signals will be so random and so low.
+        if args.alg == "rld" and step != 0 and step % 20 == 0:
+            logger.info("***** Updating RL Agent *****")
+            print(global_step)
+            returns = compute_returns(prev_value, rewards)
+            log_probs = log_probs[:-1] # truncate as we cannot reach next step
+            values = values[:-1]
+            log_probs = torch.cat(log_probs)
+            returns = torch.cat(returns).detach()
+            values = torch.cat(values)
+            # transform log prob
+            advantage = returns - values
+
+            actor_loss = -(log_probs * advantage.detach()).mean()
+            critic_loss = advantage.pow(2).mean()
+            pbar.set_postfix({'actor_loss': actor_loss.tolist()})
+            pbar.set_postfix({'critic_loss': critic_loss.tolist()})
+
+            optimizerA.zero_grad()
+            optimizerC.zero_grad()
+            actor_loss.backward()
+            critic_loss.backward()
+            optimizerA.step()
+            optimizerC.step()
+
+            # reset RL memory
+            prev_action, prev_dist, prev_value, prev_state = None, None, None, None
+            log_probs = []
+            values = []
+            rewards = []
+            entropy = 0
+            rl_coldstart = True
+
         tr_loss += student_loss.item()
         nb_tr_examples += input_ids.size(0)
         nb_tr_steps += 1
@@ -177,23 +227,6 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             student_model.zero_grad()
             global_step += 1
         pbar.set_postfix({'train_loss': student_loss.tolist()})
-
-        # RL learning
-        # log_probs = torch.cat(log_probs)
-        # returns = torch.cat(returns).detach()
-        # values = torch.cat(values)
-
-        # advantage = returns - values
-
-        # actor_loss = -(log_probs * advantage.detach()).mean()
-        # critic_loss = advantage.pow(2).mean()
-
-        # optimizerA.zero_grad()
-        # optimizerC.zero_grad()
-        # actor_loss.backward()
-        # critic_loss.backward()
-        # optimizerA.step()
-        # optimizerC.step()
 
         # dnn evaluation
         if global_step % 500 == 0:

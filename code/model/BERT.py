@@ -436,7 +436,7 @@ class BertForSequenceClassification(nn.Module):
         logits = self.classifier(pooled_output)
 
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
+            loss_fct = CrossEntropyLoss(reduction="none")
             loss = loss_fct(logits, labels)
             return loss, logits, env_encoder, env_attention
         else:

@@ -37,7 +37,7 @@ class Critic(nn.Module):
         self.action_size = action_size
         self.linear1 = nn.Linear(self.state_size, 128)
         self.linear2 = nn.Linear(128, 256)
-        self.linear3 = nn.Linear(256, 1)
+        self.linear3 = nn.Linear(256, 3)
 
     def forward(self, state):
         output = F.relu(self.linear1(state))
