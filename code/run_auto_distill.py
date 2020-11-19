@@ -188,7 +188,6 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         # we don't want to only update RL once a whole training epoch is done.
         # if this happen, signals will be so random and so low.
         if args.alg == "rld" and step != 0 and step % 20 == 0:
-            logger.info("***** Updating RL Agent *****")
             returns = compute_returns(prev_value, rewards)
             log_probs = log_probs[:-1] # truncate as we cannot reach next step
             values = values[:-1]
