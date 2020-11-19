@@ -54,6 +54,10 @@ parser.add_argument("--student_config_file",
                     type=str,
                     help="The config json file corresponding to the student BERT model.")   
 # some default argments we don't usually change
+parser.add_argument("--is_tensorboard",
+                    default=False,
+                    action='store_true',
+                    help="Whether to record using tensorboar.")    
 parser.add_argument("--eval_test",
                     default=False,
                     action='store_true',

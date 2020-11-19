@@ -321,7 +321,7 @@ def load_student_setups(vocab_file,
 
 def step_train(train_dataloader, test_dataloader, model, optimizer, 
                device, n_gpu, evaluate_interval, global_step, 
-               output_log_file, epoch, global_best_acc, args):
+               output_log_file, epoch, global_best_acc, args, wandb):
     tr_loss = 0
     nb_tr_examples, nb_tr_steps = 0, 0
     pbar = tqdm(train_dataloader, desc="Iteration")
@@ -363,7 +363,7 @@ def step_train(train_dataloader, test_dataloader, model, optimizer,
         if global_step % 500 == 0:
             logger.info("***** Evaluation Interval Hit *****")
             global_best_acc = evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch, 
-                                       global_step, output_log_file, global_best_acc, args)
+                                       global_step, output_log_file, global_best_acc, args, wandb)
 
     return global_step, global_best_acc
 
@@ -422,7 +422,7 @@ def evaluate_fast(test_dataloader, model, device, n_gpu, args):
     return test_accuracy
 
 def evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch, 
-             global_step, output_log_file, global_best_acc, args):
+             global_step, output_log_file, global_best_acc, args, wandb):
     # eval_test
     if args.eval_test:
         model.eval()
@@ -481,6 +481,10 @@ def evaluate(test_dataloader, model, device, n_gpu, nb_tr_steps, tr_loss, epoch,
         result = {'epoch': epoch,
                 'global_step': global_step,
                 'loss': loss_tr}
+
+    if args.is_tensorboard:
+        wandb.log({'eval_loss': test_loss}, step=global_step)
+        wandb.log({'eval_accuracy': test_accuracy}, step=global_step)
 
     logger.info("***** Eval results *****")
     with open(output_log_file, "a+") as writer:

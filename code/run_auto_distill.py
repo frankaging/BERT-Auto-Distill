@@ -2,6 +2,7 @@ import argparse
 
 from util.distill_helper import *
 from torch.nn import CrossEntropyLoss, BCELoss, Sigmoid
+import datetime
 
 import torch.optim as optim
 import logging
@@ -49,8 +50,9 @@ def compute_returns(next_value, rewards, gamma=0.99):
 
 # we include here as it is clearly as this is our main function
 def step_distill(train_dataloader, test_dataloader, teacher_model, student_model,
-                 rl_agents, rl_env, optimizerA, optimizerC, optimizer, device, n_gpu, evaluate_interval, global_step, 
-                 output_log_file, epoch, global_best_acc, args):
+                 rl_agents, rl_env, optimizerA, optimizerC, optimizer, device, 
+                 n_gpu, evaluate_interval, global_step, 
+                 output_log_file, epoch, global_best_acc, args, wandb):
     tr_loss = 0
     nb_tr_examples, nb_tr_steps = 0, 0
     pbar = tqdm(train_dataloader, desc="Iteration")
@@ -121,6 +123,9 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                 log_probs.append(log_prob)
                 values.append(prev_value)
                 rewards.append(reward)
+                if args.is_tensorboard:
+                    wandb.log({'reward': reward}, step=global_step)
+                    wandb.log({'entropy': entropy}, step=global_step)
             #####
 
             # get rl agents
@@ -198,6 +203,10 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             pbar.set_postfix({'actor_loss': actor_loss.tolist()})
             pbar.set_postfix({'critic_loss': critic_loss.tolist()})
 
+            if args.is_tensorboard:
+                wandb.log({'actor_loss': actor_loss.tolist()}, step=global_step)
+                wandb.log({'critic_loss': critic_loss.tolist()}, step=global_step)
+
             optimizerA.zero_grad()
             optimizerC.zero_grad()
             actor_loss.backward()
@@ -222,17 +231,36 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             global_step += 1
         pbar.set_postfix({'train_loss': student_loss.tolist()})
 
+        if args.is_tensorboard:
+            wandb.log({'train_loss': student_loss.tolist()}, step=global_step)
+
         # dnn evaluation
         if global_step % 500 == 0:
             logger.info("***** Evaluation Interval Hit *****")
             global_best_acc = evaluate(test_dataloader, student_model, device, n_gpu, nb_tr_steps, tr_loss, epoch, 
-                                       global_step, output_log_file, global_best_acc, args)
+                                       global_step, output_log_file, global_best_acc, args, wandb)
 
     return global_step, global_best_acc
 
 def main(args):
 
     device, n_gpu, output_log_file = system_setups(args)
+    
+    # this is an extra step to check with wandb
+    if args.is_tensorboard:  
+        import wandb
+        args.date_time = "{}-{}".format(datetime.datetime.now().month, datetime.datetime.now().day)
+        filename = "{0}_{1}_algo_{2}_ml_{3}_lr_{}_seed_{}".format(
+            args.task_name,
+            args.model_type,
+            args.alg,
+            args.max_seq_length,
+            args.learning_rate,
+            args.seed
+        )
+        wandb.init(project="{}_{}".format(args.task_name, args.date_time), name=filename)
+        wandb.tensorboard.patch(save=True, pytorch=True)
+        wandb.config.update(args) # adds all of the arguments as config variables
 
     # data loader, we load the model and corresponding training and testing sets
     if args.model_type == "TeacherBERT":
@@ -264,14 +292,14 @@ def main(args):
             global_step, global_best_acc = \
                 step_train(train_dataloader, test_dataloader, model, optimizer, 
                            device, n_gpu, evaluate_interval, global_step, 
-                           output_log_file, epoch, global_best_acc, args)
+                           output_log_file, epoch, global_best_acc, args, wandb)
         elif args.model_type == "StudentBERT":
             # we are training a student model instead
             global_step, global_best_acc = \
                 step_distill(train_dataloader, test_dataloader, 
                              teacher_model, student_model, rl_agents, rl_env, optimizerA, optimizerC, 
                              optimizer, device, n_gpu, evaluate_interval, global_step, 
-                             output_log_file, epoch, global_best_acc, args)
+                             output_log_file, epoch, global_best_acc, args, wandb)
         epoch += 1
 
     logger.info("***** Global best performance *****")
