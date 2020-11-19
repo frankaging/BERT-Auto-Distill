@@ -284,7 +284,6 @@ def main(args):
             _ = evaluate_fast(test_dataloader, teacher_model, device, n_gpu, args)
 
     # reset the rl env
-    rl_env.reset()
     optimizerA = optim.Adam(rl_agents[0].parameters())
     optimizerC = optim.Adam(rl_agents[1].parameters())
     # main training step    
