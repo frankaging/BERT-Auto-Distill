@@ -199,8 +199,6 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
             actor_loss = -(log_probs * advantage.detach()).mean()
             critic_loss = advantage.pow(2).mean()
-            pbar.set_postfix({'actor_loss': actor_loss.cpu().numpy().tolist()})
-            pbar.set_postfix({'critic_loss': critic_loss.cpu().numpy().tolist()})
 
             if args.is_tensorboard:
                 wandb.log({'actor_loss': actor_loss.detach().cpu().numpy().tolist()}, step=global_step)
