@@ -23,7 +23,7 @@ def imitation_distance(teacher_states, student_states, seq_mask, alg="pkd"):
     if isinstance(student_states, list):
         student_states = torch.stack(student_states, dim=0)
     
-    if alg == "rld":
+    if alg.startswith("rld"):
         # taking the unit value
         teacher_states_d = teacher_states.detach().data # detach it
         student_states_d = student_states.detach().data
@@ -164,6 +164,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                 action[2, :] = 11
             elif args.alg == "rld-1":
                 action[2, :] = 11
+            # plot actions here
+            wandb.log({"actions": wandb.Histogram(action.detach().cpu().numpy().tolist())})
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
                                                     # contains a entry with the same
@@ -187,8 +189,6 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             student_loss += imi_dist * alpha + (1.0 - alpha) * logit_loss
 
             rl_coldstart = False
-        elif args.alg == "srld":
-            pass
         elif args.alg == "nd":
             pass
         elif args.alg == "pkd":
@@ -201,9 +201,6 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # TODO: make alpha a hyperparameter
             alpha = 0.5
             student_loss += imi_dist * alpha + (1.0 - alpha) * nll_loss
-        elif args.alg == "rrld":
-            # let us try a random RL agent here
-            pass
         else:
             pass
 
@@ -217,7 +214,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         # we will need to update for certain number of training step.
         # we don't want to only update RL once a whole training epoch is done.
         # if this happen, signals will be so random and so low.
-        if args.alg == "rld" and step != 0 and step % 50 == 0:
+        if args.alg.startswith("rld") and step != 0 and step % 50 == 0:
             returns = compute_returns(prev_value, rewards)
             log_probs = log_probs[:-1] # truncate as we cannot reach next step
             values = values[:-1]
@@ -307,7 +304,7 @@ def main(args):
     # reset the rl env
     optimizerA = None
     optimizerC = None
-    if args.alg == "rld":
+    if args.alg.startswith("rld"):
         rl_env.reset()
         optimizerA = optim.Adam(rl_agents[0].parameters())
         optimizerC = optim.Adam(rl_agents[1].parameters())
