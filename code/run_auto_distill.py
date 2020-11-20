@@ -165,7 +165,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             elif args.alg == "rld-1":
                 action[2, :] = 11
             # plot actions here
-            wandb.log({"actions": wandb.Histogram(action.detach().cpu().numpy().tolist())})
+            wandb.log({"actions": wandb.Histogram(action.detach().cpu().numpy().tolist())}, step=global_step)
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
                                                     # contains a entry with the same
@@ -228,8 +228,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             critic_loss = advantage.pow(2).mean()
 
             if args.is_tensorboard:
-                wandb.log({'actor_loss': actor_loss.detach().cpu().numpy().tolist()}, step=global_step)
-                wandb.log({'critic_loss': critic_loss.detach().cpu().numpy().tolist()}, step=global_step)
+                wandb.log({'actor_loss': actor_loss.detach().cpu().numpy().tolist()}, step=global_step+1)
+                wandb.log({'critic_loss': critic_loss.detach().cpu().numpy().tolist()}, step=global_step+1)
 
             optimizerA.zero_grad()
             optimizerC.zero_grad()
