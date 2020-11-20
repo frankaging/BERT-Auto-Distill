@@ -123,7 +123,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
         elif args.alg.startswith("rld"):
             # adding bd loss
-            logit_loss_func = BCELoss()
+            logit_loss_func = BCELoss(reduction="none")
             logits_to_prob = Sigmoid()
             logit_loss = logit_loss_func(logits_to_prob(student_logits), 
                                          logits_to_prob(teacher_logits.detach().data))
@@ -133,7 +133,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # thus reward is delayed till a start
             # this reward is for the previous RL actions.
             if not rl_coldstart:
-                reward = -1.0 * student_loss_raw.unsqueeze(dim=-1)
+                reward = -1.0 * (student_loss_raw.unsqueeze(dim=-1) + logit_loss)
                 log_prob = prev_dist.log_prob(prev_action)
                 entropy += prev_dist.entropy().mean()
                 log_prob = log_prob.permute(1,0)
@@ -167,7 +167,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             elif args.alg == "rld-1":
                 action[2, :] = 11
             # plot actions here
-            wandb.log({"actions": wandb.Histogram(action.detach().cpu().numpy().tolist())}, step=global_step)
+            wandb.log({"actions": wandb.Histogram(action.detach().cpu().int().numpy().tolist())}, step=global_step)
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
                                                     # contains a entry with the same
@@ -188,7 +188,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
 
             # dnn loss
             alpha = 0.5
-            student_loss += imi_dist * alpha + (1.0 - alpha) * logit_loss
+            student_loss = imi_dist * alpha + (1.0 - alpha) * student_loss
 
             rl_coldstart = False
         elif args.alg == "nd":
