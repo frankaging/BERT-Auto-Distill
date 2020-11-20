@@ -12,7 +12,7 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
                     level = logging.INFO)
 logger = logging.getLogger(__name__)
 
-def imitation_distance(teacher_states, student_states, seq_mask, dist_type="pkd"):
+def imitation_distance(teacher_states, student_states, seq_mask, alg="pkd"):
     """
     this part, we can take advantage of previous papers.
     Eqn. (7) for this paper https://arxiv.org/pdf/1908.09355.pdf
@@ -23,11 +23,25 @@ def imitation_distance(teacher_states, student_states, seq_mask, dist_type="pkd"
     if isinstance(student_states, list):
         student_states = torch.stack(student_states, dim=0)
     
-    if dist_type == "pkd":
+    if alg == "rld":
         # taking the unit value
         teacher_states_d = teacher_states.detach().data # detach it
         student_states_d = student_states.detach().data
 
+        teacher_states_n = teacher_states_d.norm(p=2, dim=-1, keepdim=True)
+        student_states_n = student_states_d.norm(p=2, dim=-1, keepdim=True)
+
+        teacher_states_normalized = teacher_states_d.div(teacher_states_n)
+        student_states_normalized = student_states_d.div(student_states_n)
+
+        pkd_dist = teacher_states_normalized - student_states_normalized
+        pkd_dist = pkd_dist.norm(p=2, dim=-1, keepdim=True).pow(2)
+        pkd_dist = pkd_dist.sum(dim=0).sum(dim=-1)
+        # masking
+        pkd_dist = pkd_dist * seq_mask
+        return pkd_dist.mean() # using the same reduction
+    elif alg == "pkd":
+        # we cannot detach
         teacher_states_n = teacher_states_d.norm(p=2, dim=-1, keepdim=True)
         student_states_n = student_states_d.norm(p=2, dim=-1, keepdim=True)
 
