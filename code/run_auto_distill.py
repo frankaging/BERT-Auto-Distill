@@ -133,7 +133,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # thus reward is delayed till a start
             # this reward is for the previous RL actions.
             if not rl_coldstart:
-                reward = -1.0 * (student_loss_raw.unsqueeze(dim=-1) + logit_loss)
+                reward = -1.0 * (student_loss_raw.unsqueeze(dim=-1)+logit_loss.sum(-1, keepdim=True))
                 log_prob = prev_dist.log_prob(prev_action)
                 entropy += prev_dist.entropy().mean()
                 log_prob = log_prob.permute(1,0)
@@ -167,7 +167,8 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             elif args.alg == "rld-1":
                 action[2, :] = 11
             # plot actions here
-            wandb.log({"actions": wandb.Histogram(action.detach().cpu().int().numpy().tolist())}, step=global_step)
+            if args.is_tensorboard:
+                wandb.log({"actions": wandb.Histogram(action.detach().cpu().int().numpy().tolist())}, step=global_step)
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
                                                     # contains a entry with the same
