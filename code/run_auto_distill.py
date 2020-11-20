@@ -2,7 +2,6 @@ import argparse
 
 from util.distill_helper import *
 from torch.nn import CrossEntropyLoss, BCELoss, Sigmoid
-import torch.nn.functional as F
 
 import datetime
 
@@ -172,14 +171,14 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             pass
         elif args.alg == "pkd":
             # other baseline
-            logit_loss_func = BCELoss()
-            logits_to_prob = Sigmoid()
-            logit_loss = logit_loss_func(logits_to_prob(student_logits),
-                                         logits_to_prob(teacher_logits.detach().data))
+            imi_dist = \
+                imitation_distance(teacher_env_encoder[-3:],
+                                   student_env_encoder,
+                                   input_mask)
             nll_loss = F.cross_entropy(student_logits, label_ids, reduction='mean')
             # TODO: make alpha a hyperparameter
             alpha = 0.5
-            student_loss += logit_loss * alpha + (1.0 - alpha) * nll_loss
+            student_loss += imi_dist * alpha + (1.0 - alpha) * nll_loss
         elif args.alg == "rrld":
             # let us try a random RL agent here
             pass
