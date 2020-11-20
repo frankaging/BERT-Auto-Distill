@@ -33,7 +33,7 @@ parser.add_argument('--model_type',
 parser.add_argument('--alg', 
                     type=str,
                     default="bd",
-                    choices=["bd", "nd", 'rld', 'pkd', 'kd'],
+                    choices=["bd", "nd", 'rld', 'pkd', 'kd', 'rld-2'],
                     help='what type of distillation we are looking for? \n'
                          'bd (baseline distill), nd (no distill), rld (rl-based distill), '
                          'pkd and kd (other type of sota distill algs)')

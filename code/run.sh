@@ -17,7 +17,7 @@ CUDA_VISIBLE_DEVICES=1,3,4,8 python run_auto_distill.py \
 --init_checkpoint ../models/teacher_model/pytorch_model.bin
 
 # Training/distilling student model
-CUDA_VISIBLE_DEVICES=1,5,6,7,8 python run_auto_distill.py \
+CUDA_VISIBLE_DEVICES=1,5,6,9 python run_auto_distill.py \
 --task_name SST2 \
 --data_dir ../datasets/SST-2/ \
 --vocab_file ../models/student_model/vocab.txt \
@@ -34,7 +34,7 @@ CUDA_VISIBLE_DEVICES=1,5,6,7,8 python run_auto_distill.py \
 --seed 42 \
 --teacher_config_file ../models/teacher_model/bert_config.json \
 --teacher_model_path ../results/SST2-TeacherBERT/best_checkpoint.bin \
---alg rld \
+--alg rld-2 \
 --is_tensorboard
 
 # Sample data
