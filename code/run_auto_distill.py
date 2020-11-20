@@ -3,6 +3,8 @@ import argparse
 from util.distill_helper import *
 from torch.nn import CrossEntropyLoss, BCELoss, Sigmoid
 
+import torch.nn.functional as F
+
 import datetime
 
 import torch.optim as optim
