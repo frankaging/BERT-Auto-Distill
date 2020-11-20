@@ -42,11 +42,11 @@ def imitation_distance(teacher_states, student_states, seq_mask, alg="pkd"):
         return pkd_dist.mean() # using the same reduction
     elif alg == "pkd":
         # we cannot detach
-        teacher_states_n = teacher_states_d.norm(p=2, dim=-1, keepdim=True)
-        student_states_n = student_states_d.norm(p=2, dim=-1, keepdim=True)
+        teacher_states_n = teacher_states.norm(p=2, dim=-1, keepdim=True)
+        student_states_n = student_states.norm(p=2, dim=-1, keepdim=True)
 
-        teacher_states_normalized = teacher_states_d.div(teacher_states_n)
-        student_states_normalized = student_states_d.div(student_states_n)
+        teacher_states_normalized = teacher_states.div(teacher_states_n)
+        student_states_normalized = student_states.div(student_states_n)
 
         pkd_dist = teacher_states_normalized - student_states_normalized
         pkd_dist = pkd_dist.norm(p=2, dim=-1, keepdim=True).pow(2)
