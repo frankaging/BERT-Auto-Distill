@@ -34,7 +34,7 @@ CUDA_VISIBLE_DEVICES=1,5,6,9 python run_auto_distill.py \
 --seed 42 \
 --teacher_config_file ../models/teacher_model/bert_config.json \
 --teacher_model_path ../results/SST2-TeacherBERT/best_checkpoint.bin \
---alg rld-2 \
+--alg rld-1 \
 --is_tensorboard
 
 # Sample data

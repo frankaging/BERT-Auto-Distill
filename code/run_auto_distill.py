@@ -310,8 +310,8 @@ def main(args):
     optimizerC = None
     if args.alg.startswith("rld"):
         rl_env.reset()
-        optimizerA = optim.Adam(rl_agents[0].parameters(), lr=1e-5)
-        optimizerC = optim.Adam(rl_agents[1].parameters(), lr=1e-5)
+        optimizerA = optim.Adam(rl_agents[0].parameters(), lr=2e-5)
+        optimizerC = optim.Adam(rl_agents[1].parameters(), lr=2e-5)
     # main training step    
     global_step = 0
     global_best_acc = -1
