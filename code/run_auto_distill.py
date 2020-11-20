@@ -119,7 +119,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
                                          logits_to_prob(teacher_logits.detach().data))
             student_loss += logit_loss
 
-        elif args.alg == "rld":
+        elif args.alg.startswith("rld"):
             # adding bd loss
             logit_loss_func = BCELoss()
             logits_to_prob = Sigmoid()
@@ -158,6 +158,12 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # sample action
             imitate_count = 3
             action = dist.sample(sample_shape=(imitate_count, ))
+            # overriding the last two layers to let RL easier to learn
+            if args.alg == "rld-2":
+                action[1, :] = 10
+                action[2, :] = 11
+            elif args.alg == "rld-1":
+                action[2, :] = 11
             # take action
             imitation_states = rl_env.step(action) # the imitation_states should 
                                                     # contains a entry with the same
@@ -177,10 +183,12 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             prev_value = value
 
             # dnn loss
-            student_loss += logit_loss
-            student_loss += imi_dist
+            alpha = 0.5
+            student_loss += imi_dist * alpha + (1.0 - alpha) * logit_loss
 
             rl_coldstart = False
+        elif args.alg == "srld":
+            pass
         elif args.alg == "nd":
             pass
         elif args.alg == "pkd":
@@ -209,7 +217,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
         # we will need to update for certain number of training step.
         # we don't want to only update RL once a whole training epoch is done.
         # if this happen, signals will be so random and so low.
-        if args.alg == "rld" and step != 0 and step % 20 == 0:
+        if args.alg == "rld" and step != 0 and step % 50 == 0:
             returns = compute_returns(prev_value, rewards)
             log_probs = log_probs[:-1] # truncate as we cannot reach next step
             values = values[:-1]
