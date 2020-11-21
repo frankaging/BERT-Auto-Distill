@@ -30,7 +30,7 @@ CUDA_VISIBLE_DEVICES=1,5,6,9 python run_auto_distill.py \
 --eval_batch_size 8 \
 --learning_rate 2e-5 \
 --num_train_epochs 3 \
---output_dir ../results/SST2-StudentBERT-RLD-2/ \
+--output_dir ../results/SST2-StudentBERT-RLD-1/ \
 --seed 42 \
 --teacher_config_file ../models/teacher_model/bert_config.json \
 --teacher_model_path ../results/SST2-TeacherBERT/best_checkpoint.bin \

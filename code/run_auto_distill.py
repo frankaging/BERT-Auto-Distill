@@ -133,7 +133,7 @@ def step_distill(train_dataloader, test_dataloader, teacher_model, student_model
             # thus reward is delayed till a start
             # this reward is for the previous RL actions.
             if not rl_coldstart:
-                reward = -1.0 * (student_loss_raw.unsqueeze(dim=-1)+logit_loss.sum(-1, keepdim=True))
+                reward = -1.0 * (student_loss_raw.unsqueeze(dim=-1))
                 log_prob = prev_dist.log_prob(prev_action)
                 entropy += prev_dist.entropy().mean()
                 log_prob = log_prob.permute(1,0)
@@ -279,7 +279,7 @@ def main(args):
         import wandb
         # args.date_time = "{}-{}".format(datetime.datetime.now().month, datetime.datetime.now().day)
         args.date_time = "11-19"
-        filename = "{0}_{1}_algo_{2}_ml_{3}_lr_{4}_seed_{5}".format(
+        filename = "{0}_{1}_algo_{2}_ml_{3}_lr_{4}_seed_{5}_updated".format(
             args.task_name,
             args.model_type,
             args.alg,
